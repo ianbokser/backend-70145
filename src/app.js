@@ -1,74 +1,55 @@
 import express from 'express';
+import displayRoutes from 'express-routemap';
 import { engine } from 'express-handlebars';
+import productsRouter from './routes/products.routes.js';
+import cartsRouter from './routes/carts.routes.js';
+import viewsRouter from './routes/view.routes.js';
+import sessionsRouter from './routes/sessions.routes.js';
+import cookieParser from 'cookie-parser';
+import session from 'express-session';
+import FileStore from 'session-file-store';
+import MongoStore from 'connect-mongo';
+import initializePassport from './config/passport.config.js';
+import configObject from './config/config.js';
 import passport from 'passport';
-
-import { router as sessionsRouter } from './routes/sessions.Router.js';
-import { router as vistasRouter } from './routes/viewsRouter.js';
-import { connDB } from './ConnDB.js';
-import { config } from './config/config.js';
-import { iniciarPassport } from './config/passportConfig.js';
-import { enviar } from './mails/mails.js';
-import { uploader } from './utils.js';
-
-
-const PORT = config.PORT;
+import cors from 'cors';
+import './database.js'
 
 const app = express();
+const fileStore = FileStore(session);
+const { PORT, MONGO_URL } = configObject
 
+// Middleware //
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.engine("handlebars", engine());
-app.set("view engine", "handlebars");
-app.set("views", "./src/views");
+app.use(express.static('public'));
+app.use(cookieParser());
+app.use(session({
+  secret: "fedeCoder",
+  resave: true,
+  saveUninitialized: true,
+  store: MongoStore.create({
+    mongoUrl: "mongodb+srv://gabrielnez:Gabo1942@cluster0.qzr7vos.mongodb.net/coderCommerce?retryWrites=true&w=majority&appName=Cluster0"
+  })
+}));
+app.use(passport.initialize()); 
+initializePassport(); 
+app.use(passport.session());
+app.use(cors());
 
-iniciarPassport();
-app.use(passport.initialize());
-app.use(express.static("./src/public"));
+// Express Handlebars //
+app.engine('handlebars', engine());
+app.set('view engine', 'handlebars');
+app.set('views', './src/views');
 
-app.use("/api/sessions", sessionsRouter);
-app.use("/", vistasRouter);
+// Rutas //
+app.use('/', productsRouter);
+app.use('/', cartsRouter);
+app.use('/', viewsRouter);
+app.use ('/api/sessions/', sessionsRouter);
 
-const server = app.listen(PORT, () => {
-    console.log(`Server escuchando en puerto ${PORT}`);
+// Servidor //
+const httpServer = app.listen(PORT, () => {
+  displayRoutes(app)
+  console.log(`Escuchando el servidor en http://localhost:${PORT}`);
 });
-
-app.post("/mails", uploader.array("adjuntos"),async(req, res)=>{
-
-    let {subject, to, message}=req.body
-    if(!subject || !to || !message){
-        res.setHeader('Content-Type','application/json');
-        return res.status(400).json({error:`Complete los datos`})
-    }
-
-    let adjuntos=[]
-    if(req.files){
-        req.files.forEach(i=>{
-            adjuntos.push({
-                path: i.path,
-                filename: i.filename
-            })
-        })
-    }
-
-    try {
-        let resultado=await enviar(subject, to, message, adjuntos)
-        if(resultado.rejected.length){
-            res.setHeader('Content-Type','application/json');
-            return res.status(400).json({error:`Alguno de los destinatarios no pudo procesarse:`, detalle: resultado.rejected})
-        }
-
-        if(req.files){
-            req.files.forEach(i=>{
-                fs.unlinkSync(i.path)
-            })
-        }
-        
-        res.setHeader('Content-Type','application/json');
-        return res.status(200).json({payload:"mail enviado"});
-    } catch (error) {
-        res.setHeader('Content-Type','application/json');
-        return res.status(500).json({error:`Error al enviar mail... :(`})
-    }
-})
-
-connDB(config.MONGO_URL, config.DB_NAME);

@@ -1,6 +1,16 @@
-export const config = { 
-    PORT: 3000, 
-    MONGO_URL: "mongodb+srv://ianbok2121:EYpToATaHMuScSaM@cluster0.0lhnb.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0",
-    DB_NAME: "ecommerce",
-    SECRET: "SecretKey"
-};
+import dotenv from "dotenv"; 
+
+import program from "../utils/commander.js"; 
+const { mode } = program.opts(); 
+
+dotenv.config({
+    path: mode === "desarrollo" ? "./.env.development" : "./.env.production"
+}); 
+
+const configObject = {
+    PORT: process.env.PORT, 
+    MONGO_URL: process.env.MONGO_URL,
+    persistence: process.env.PERSISTENCE || "mongo"
+}
+
+export default configObject;
